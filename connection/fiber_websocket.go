@@ -74,6 +74,7 @@ func (factory *WebSocketConnectionFactory) New(listener func(Connection, map[str
 
 //Setup - setup ConnectionFactory at Get endpoint
 func (factory *WebSocketConnectionFactory) Setup() func(*fiber.Ctx) {
+	//TODO - decouple setup from relying on id param, make it configurable
 	return websocket.New(func(c *websocket.Conn) {
 		connection := &WebSocketConnection{conn: c}
 		params := map[string]string{

@@ -1,4 +1,6 @@
+# ignore extensionless
+*
+!/**/
+!*.*
+
 go.sum
-main.go
-GameBox
-statics/**
