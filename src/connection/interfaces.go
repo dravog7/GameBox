@@ -5,6 +5,7 @@ type Connection interface {
 	Listen(func(Connection, string, string))
 	Send(string) error
 	Close() error
+	String() string
 }
 
 //Factory - Defines Factory which generates Connection objects

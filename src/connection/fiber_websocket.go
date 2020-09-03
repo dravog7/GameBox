@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber"
 	"github.com/gofiber/websocket"
+	"github.com/google/uuid"
 )
 
 //WebSocketConnection - a web socket connection struct
@@ -12,6 +13,7 @@ type WebSocketConnection struct {
 	conn      *websocket.Conn
 	closed    bool
 	listeners []func(Connection, string, string)
+	uuid      uuid.UUID
 }
 
 //Listen - add listener for messages
@@ -30,6 +32,13 @@ func (conn *WebSocketConnection) Send(msg string) error {
 //Close - closes connection
 func (conn *WebSocketConnection) Close() error {
 	return conn.conn.Close()
+}
+
+func (conn *WebSocketConnection) String() string {
+	if conn.uuid == uuid.Nil {
+		conn.uuid = uuid.New()
+	}
+	return conn.uuid.String()
 }
 
 func (conn *WebSocketConnection) recv() {

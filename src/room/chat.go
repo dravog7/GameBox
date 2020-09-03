@@ -1,21 +1,25 @@
 package room
 
 import (
+	"fmt"
 	"gamebox/connection"
 )
 
 //ChatRoom - A basic chat room
 type ChatRoom struct {
 	Name        string
-	msgs        []string
-	connections []connection.Connection
+	connections map[string]connection.Connection
 }
 
 //Join - join a connection to room
 func (room *ChatRoom) Join(conn connection.Connection) {
-	room.connections = append(room.connections, conn)
+	if room.connections == nil {
+		room.connections = make(map[string]connection.Connection)
+	}
+	room.connections[conn.String()] = conn
 	conn.Listen(func(co connection.Connection, mt string, msg string) {
 		if mt == "close" {
+			delete(room.connections, co.String())
 			return
 		}
 		room.process(msg)
@@ -30,8 +34,8 @@ func (room *ChatRoom) process(msg string) {
 	for _, v := range room.connections {
 		err := v.Send(msg)
 		if err != nil {
+			fmt.Println(err)
 			continue
 		}
 	}
-	room.msgs = append(room.msgs, msg)
 }
