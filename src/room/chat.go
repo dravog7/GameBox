@@ -1,7 +1,6 @@
 package room
 
 import (
-	"fmt"
 	"gamebox/connection"
 )
 
@@ -28,9 +27,11 @@ func (room ChatRoom) String() string {
 }
 
 func (room *ChatRoom) process(msg string) {
-	fmt.Println(room.connections)
 	for _, v := range room.connections {
-		v.Send(msg)
+		err := v.Send(msg)
+		if err != nil {
+			continue
+		}
 	}
 	room.msgs = append(room.msgs, msg)
 }

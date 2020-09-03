@@ -1,6 +1,8 @@
 package connection
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber"
 	"github.com/gofiber/websocket"
 )
@@ -8,6 +10,7 @@ import (
 //WebSocketConnection - a web socket connection struct
 type WebSocketConnection struct {
 	conn      *websocket.Conn
+	closed    bool
 	listeners []func(Connection, string, string)
 }
 
@@ -18,6 +21,9 @@ func (conn *WebSocketConnection) Listen(listener func(Connection, string, string
 
 //Send - write message to connection
 func (conn *WebSocketConnection) Send(msg string) error {
+	if conn.closed {
+		return fmt.Errorf("connection closed")
+	}
 	return conn.conn.WriteMessage(websocket.TextMessage, []byte(msg))
 }
 
@@ -32,6 +38,7 @@ func (conn *WebSocketConnection) recv() {
 	for {
 		mt, msg, err := conn.conn.ReadMessage()
 		if err != nil {
+			conn.closed = true
 			for _, v := range conn.listeners {
 				go v(conn, "close", "")
 			}
