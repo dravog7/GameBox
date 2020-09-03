@@ -1,4 +1,4 @@
 go.sum
-src/main.go
-src/gamebox
-src/statics/**
+main.go
+gamebox
+statics/**
