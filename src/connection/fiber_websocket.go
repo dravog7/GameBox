@@ -1,0 +1,69 @@
+package connection
+
+import (
+	"github.com/gofiber/fiber"
+	"github.com/gofiber/websocket"
+)
+
+//WebSocketConnection - a web socket connection struct
+type WebSocketConnection struct {
+	conn      *websocket.Conn
+	listeners []func(Connection, string, string)
+}
+
+//Listen - add listener for messages
+func (conn *WebSocketConnection) Listen(listener func(Connection, string, string)) {
+	conn.listeners = append(conn.listeners, listener)
+}
+
+//Send - write message to connection
+func (conn *WebSocketConnection) Send(msg string) error {
+	return conn.conn.WriteMessage(websocket.TextMessage, []byte(msg))
+}
+
+//Close - closes connection
+func (conn *WebSocketConnection) Close() error {
+	return conn.conn.Close()
+}
+
+func (conn *WebSocketConnection) recv() {
+	for len(conn.listeners) < 1 {
+	}
+	for {
+		mt, msg, err := conn.conn.ReadMessage()
+		if err != nil {
+			for _, v := range conn.listeners {
+				go v(conn, "close", "")
+			}
+			break
+		}
+		if mt != websocket.TextMessage {
+			continue
+		}
+		for _, v := range conn.listeners {
+			go v(conn, "message", string(msg))
+		}
+	}
+}
+
+//WebSocketConnectionFactory - a web socket connection factory
+type WebSocketConnectionFactory struct {
+	newListener func(Connection, map[string]string)
+}
+
+//New - add a listener for new connection
+func (factory *WebSocketConnectionFactory) New(listener func(Connection, map[string]string)) {
+	factory.newListener = listener
+}
+
+//Setup - setup ConnectionFactory at Get endpoint
+func (factory *WebSocketConnectionFactory) Setup() func(*fiber.Ctx) {
+	return websocket.New(func(c *websocket.Conn) {
+		connection := &WebSocketConnection{conn: c}
+		params := map[string]string{
+			"id": c.Params("id"),
+		}
+		go factory.newListener(connection, params)
+		connection.recv()
+	})
+}
