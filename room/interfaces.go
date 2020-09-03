@@ -1,7 +1,7 @@
 package room
 
 import (
-	"gamebox/connection"
+	"github.com/dravog7/GameBox/connection"
 )
 
 //Room - Defines a room where the core logic of game resides

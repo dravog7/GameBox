@@ -2,7 +2,8 @@ package room
 
 import (
 	"fmt"
-	"gamebox/connection"
+
+	"github.com/dravog7/GameBox/connection"
 )
 
 //DefaultManager - The default room manager
