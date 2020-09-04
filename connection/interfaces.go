@@ -1,5 +1,13 @@
 package connection
 
+/*
+
+Connection and Connection Factory basic interface
+
+TODO - Add support for JSON and binary messages
+
+*/
+
 //Connection - Defines client Connections
 type Connection interface {
 	Listen(func(Connection, string, string))

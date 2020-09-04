@@ -8,6 +8,14 @@ import (
 	"github.com/google/uuid"
 )
 
+/*
+
+Websocket connection and connection Factory
+
+wraps the websocket connection and forwards it to manager.
+
+*/
+
 //WebSocketConnection - a web socket connection struct
 type WebSocketConnection struct {
 	conn      *websocket.Conn
@@ -73,13 +81,10 @@ func (factory *WebSocketConnectionFactory) New(listener func(Connection, map[str
 }
 
 //Setup - setup ConnectionFactory at Get endpoint
-func (factory *WebSocketConnectionFactory) Setup() func(*fiber.Ctx) {
-	//TODO - decouple setup from relying on id param, make it configurable
+func (factory *WebSocketConnectionFactory) Setup(getParams func(*websocket.Conn) map[string]string) func(*fiber.Ctx) {
 	return websocket.New(func(c *websocket.Conn) {
 		connection := &WebSocketConnection{conn: c}
-		params := map[string]string{
-			"id": c.Params("id"),
-		}
+		params := getParams(c)
 		go factory.newListener(connection, params)
 		connection.recv()
 	})

@@ -15,20 +15,26 @@ func main() {
 
 	app.Static("/", "./statics")
 	app.Use(func(c *fiber.Ctx) {
-		// IsWebSocketUpgrade returns true if the client
-		// requested upgrade to the WebSocket protocol.
 		if websocket.IsWebSocketUpgrade(c) {
 			c.Locals("allowed", true)
 			c.Next()
 		}
 	})
+
 	chatroom := &ChatRoom{Name: "1"}
 	manager := room.DefaultManager{}
-	manager.Register(chatroom)
 	factory := &connection.WebSocketConnectionFactory{}
+
+	manager.Register(chatroom)
 	manager.AddFactory(factory, func(err error) {
 		fmt.Println(err)
 	})
-	app.Get("/ws/:id", factory.Setup())
+
+	app.Get("/ws/:id", factory.Setup(func(c *websocket.Conn) map[string]string {
+		params := map[string]string{
+			"id": c.Params("id"), //id used by default manager to set entry point room
+		}
+		return params
+	}))
 	app.Listen(3000)
 }
