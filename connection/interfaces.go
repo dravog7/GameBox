@@ -10,7 +10,8 @@ TODO - Add support for JSON and binary messages
 
 //Connection - Defines client Connections
 type Connection interface {
-	Listen(func(Connection, string, string))
+	Listen(func(Connection, string, string)) string
+	Remove(string) error
 	Send(string) error
 	Close() error
 	String() string

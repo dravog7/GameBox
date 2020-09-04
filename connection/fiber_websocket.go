@@ -2,6 +2,7 @@ package connection
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/gofiber/fiber"
 	"github.com/gofiber/websocket"
@@ -18,15 +19,38 @@ wraps the websocket connection and forwards it to manager.
 
 //WebSocketConnection - a web socket connection struct
 type WebSocketConnection struct {
-	conn      *websocket.Conn
-	closed    bool
-	listeners []func(Connection, string, string)
-	uuid      uuid.UUID
+	conn       *websocket.Conn
+	closed     bool
+	listeners  map[string]func(Connection, string, string)
+	listenSync sync.Mutex
+	uuid       uuid.UUID
 }
 
 //Listen - add listener for messages
-func (conn *WebSocketConnection) Listen(listener func(Connection, string, string)) {
-	conn.listeners = append(conn.listeners, listener)
+func (conn *WebSocketConnection) Listen(listener func(Connection, string, string)) string {
+	conn.listenSync.Lock()
+	defer conn.listenSync.Unlock()
+	if conn.listeners == nil {
+		conn.listeners = make(map[string]func(Connection, string, string))
+	}
+	uid := uuid.New().String()
+	for _, ok := conn.listeners[uid]; ok; {
+		uid = uuid.New().String()
+		_, ok = conn.listeners[uid]
+	}
+	conn.listeners[uid] = listener
+	return uid
+}
+
+//Remove - Remove a connection listener
+func (conn *WebSocketConnection) Remove(uid string) error {
+	conn.listenSync.Lock()
+	defer conn.listenSync.Unlock()
+	if _, ok := conn.listeners[uid]; ok {
+		delete(conn.listeners, uid)
+		return nil
+	}
+	return fmt.Errorf("%s listener not exist", uid)
 }
 
 //Send - write message to connection
