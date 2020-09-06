@@ -23,7 +23,8 @@ type WebSocketConnection struct {
 	closed     bool
 	listeners  map[string]func(Connection, string, string)
 	listenSync sync.Mutex
-	uuid       uuid.UUID
+	uuid       string
+	params     map[string]string
 }
 
 //Listen - add listener for messages
@@ -61,16 +62,30 @@ func (conn *WebSocketConnection) Send(msg string) error {
 	return conn.conn.WriteMessage(websocket.TextMessage, []byte(msg))
 }
 
+//SendJSON - write JSON message to connection
+func (conn *WebSocketConnection) SendJSON(msg interface{}) error {
+	if conn.closed {
+		return fmt.Errorf("connection closed")
+	}
+	return conn.conn.WriteJSON(msg)
+}
+
 //Close - closes connection
 func (conn *WebSocketConnection) Close() error {
 	return conn.conn.Close()
 }
 
 func (conn *WebSocketConnection) String() string {
-	if conn.uuid == uuid.Nil {
-		conn.uuid = uuid.New()
+	if conn.uuid == "" {
+		conn.uuid = uuid.New().String()
 	}
-	return conn.uuid.String()
+	return conn.uuid
+}
+
+//GetParam - Get param[key] of connection (Param was assigned by GetParam argument to setup in factory)
+func (conn *WebSocketConnection) GetParam(key string) (string, bool) {
+	v, err := conn.params[key]
+	return v, err
 }
 
 func (conn *WebSocketConnection) recv() {
@@ -80,23 +95,37 @@ func (conn *WebSocketConnection) recv() {
 		mt, msg, err := conn.conn.ReadMessage()
 		if err != nil {
 			conn.closed = true
-			for _, v := range conn.listeners {
-				go v(conn, "close", "")
-			}
+			conn.emit("disconnect", "")
 			break
 		}
 		if mt != websocket.TextMessage {
 			continue
 		}
-		for _, v := range conn.listeners {
-			go v(conn, "message", string(msg))
-		}
+		conn.emit("message", string(msg))
 	}
+}
+
+func (conn *WebSocketConnection) emit(info string, msg string) {
+	for _, v := range conn.listeners {
+		go v(conn, info, msg)
+	}
+}
+
+func (conn *WebSocketConnection) reconnect(c *websocket.Conn) bool {
+	if conn.closed {
+		conn.conn = c
+		conn.closed = false
+		conn.emit("reconnect", "")
+		return true
+	}
+	return false
 }
 
 //WebSocketConnectionFactory - a web socket connection factory
 type WebSocketConnectionFactory struct {
-	newListener func(Connection, map[string]string)
+	connections    map[string]*WebSocketConnection
+	connectionSync sync.Mutex
+	newListener    func(Connection, map[string]string)
 }
 
 //New - add a listener for new connection
@@ -105,11 +134,50 @@ func (factory *WebSocketConnectionFactory) New(listener func(Connection, map[str
 }
 
 //Setup - setup ConnectionFactory at Get endpoint
-func (factory *WebSocketConnectionFactory) Setup(getParams func(*websocket.Conn) map[string]string) func(*fiber.Ctx) {
+func (factory *WebSocketConnectionFactory) Setup(getParams func(*websocket.Conn, *WebSocketParamContext) map[string]string) func(*fiber.Ctx) {
 	return websocket.New(func(c *websocket.Conn) {
-		connection := &WebSocketConnection{conn: c}
-		params := getParams(c)
+		factory.connectionSync.Lock()
+		if factory.connections == nil {
+			factory.connections = make(map[string]*WebSocketConnection)
+		}
+		var connection *WebSocketConnection
+		params := getParams(c, factory.newContext())
+		if _, ok := params["ConnectionName"]; ok {
+			if connection, ok := factory.connections[params["ConnectionName"]]; ok {
+				//Reconnecting
+				if connection.reconnect(c) {
+					factory.connectionSync.Unlock()
+					connection.params = params
+					connection.recv()
+				}
+				return
+			}
+			connection = &WebSocketConnection{conn: c, uuid: params["ConnectionName"], params: params}
+
+		} else {
+			connection = &WebSocketConnection{conn: c, params: params}
+
+		}
+		factory.connections[connection.String()] = connection
 		go factory.newListener(connection, params)
+		factory.connectionSync.Unlock()
 		connection.recv()
 	})
+}
+
+//WebSocketParamContext - Context struct send to getParam param in Setup
+type WebSocketParamContext struct {
+	ConnectionNames []string
+}
+
+func (factory *WebSocketConnectionFactory) newContext() *WebSocketParamContext {
+	var filteredNames []string
+	for k, conn := range factory.connections {
+		if conn.closed == false {
+			filteredNames = append(filteredNames, k)
+		}
+	}
+	return &WebSocketParamContext{
+		ConnectionNames: filteredNames,
+	}
 }
