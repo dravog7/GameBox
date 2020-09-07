@@ -21,6 +21,7 @@ wraps the websocket connection and forwards it to manager.
 //WebSocketConnection - a web socket connection struct
 type WebSocketConnection struct {
 	conn       *websocket.Conn
+	writeSync  sync.Mutex
 	closed     bool
 	listeners  map[string]func(Connection, string, string)
 	listenSync sync.Mutex
@@ -61,6 +62,8 @@ func (conn *WebSocketConnection) Remove(uid string) error {
 
 //Send - write message to connection
 func (conn *WebSocketConnection) Send(msg string) error {
+	conn.writeSync.Lock()
+	defer conn.writeSync.Unlock()
 	if conn.closed {
 		return fmt.Errorf("connection closed")
 	}
@@ -69,6 +72,8 @@ func (conn *WebSocketConnection) Send(msg string) error {
 
 //SendJSON - write JSON message to connection
 func (conn *WebSocketConnection) SendJSON(msg interface{}) error {
+	conn.writeSync.Lock()
+	defer conn.writeSync.Unlock()
 	if conn.closed {
 		return fmt.Errorf("connection closed")
 	}
@@ -130,7 +135,7 @@ func (conn *WebSocketConnection) pingLoop() {
 
 func (conn *WebSocketConnection) emit(info string, msg string) {
 	for _, v := range conn.listeners {
-		go v(conn, info, msg)
+		go safeConnEmit(v, conn, info, msg)
 	}
 }
 
