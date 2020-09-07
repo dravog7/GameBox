@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>test websocket</title>
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@rc/dist/js.cookie.min.js"></script>
     <style>
         #box{
             display: flex;
@@ -11,9 +12,12 @@
             width: 100vw;
             flex:1;
             margin: auto;
+            overflow-y: scroll;
+            overflow-x: hidden;
         }
         #box > div {
             width: 100%;
+            overflow-wrap: break-word;
         }
         #box > div:nth-child(even) {
             width: 100%;
@@ -30,34 +34,67 @@
     </style>
 </head>
 <body style="display:flex;flex-direction: column;width:100vw;height:100vh;margin:0;">
+    <div style="position: absolute;top:0;right:0;"><span id="ping"></span></div>
     <div id="box">
 
     </div>
     <div id="inp-container">
+        <button id="inp-rename">Rename</button>
         <input type="text" id="inp-text" />
         <button id="inp-submit">send!</button>
     </div>
     <script>
         function add(e) {
-            let msg = e.data;
-            if(e.data=="getName"){
-                let nam=prompt("Whats Your Name?:",false)
-                console.log(nam)
-                conn.send(nam)
+            console.log(e)
+            let msg = JSON.parse(e.data);
+            setPing(msg.Ping)
+            if(msg.Command=="message"){
+                makeDiv(msg.User+":"+msg.Value)
                 return
             }
+            if(msg.Command=="remember"){
+                Cookies.set("name",msg.Value)
+            }
+        }
+        function setPing(num){
+            document.getElementById("ping").innerText = num
+        }
+        function rename(name){
+            let resp = {
+                Command:"rename",
+                Value:name,
+            }
+            conn.send(JSON.stringify(resp))
+            return
+        }
+        function makeDiv(msg){
             let div = document.createElement('div');
             div.innerText = msg;
             document.getElementById('box').appendChild(div);
         }
-
         conn = new WebSocket('ws://'+window.location.host+'/ws/1')
         conn.onopen = function(e){
-            add({data:"joined chat"})
+            add({
+                data:JSON.stringify({
+                    Command:"message",
+                    User:"",
+                    Value:"Joined chat",
+                })
+            })
+            document.getElementById("inp-rename").addEventListener("click",function(){
+                val = prompt("Name?")
+                if(val){
+                    rename(val)
+                }
+            })
             function send(e){
                 let input = document.getElementById("inp-text");
                 let msg = input.value;
-                conn.send(msg);
+                let resp = {
+                    Command:"message",
+                    Value:msg,
+                }
+                conn.send(JSON.stringify(resp));
                 input.value = "";
             }
             conn.onmessage = add
