@@ -1,41 +1,51 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/dravog7/GameBox/connection"
-	"github.com/dravog7/GameBox/room"
-
-	"github.com/gofiber/fiber"
-	"github.com/gofiber/websocket"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/websocket/v2"
 )
+
+type OutMessage struct {
+	Command string
+	Value   string
+	Ping    string `json:",omitempty"`
+}
 
 func main() {
 	app := fiber.New()
-
 	app.Static("/", "./statics")
-	app.Use(func(c *fiber.Ctx) {
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		// IsWebSocketUpgrade returns true if the client
+		// requested upgrade to the WebSocket protocol.
 		if websocket.IsWebSocketUpgrade(c) {
 			c.Locals("allowed", true)
 			c.Next()
+			return nil
 		}
+		return fiber.ErrUpgradeRequired
 	})
 
-	chatroom := &ChatRoom{Name: "1"}
-	manager := room.DefaultManager{}
-	factory := &connection.WebSocketConnectionFactory{}
-
-	manager.Register(chatroom)
-	manager.AddFactory(factory, func(err error) {
-		fmt.Println(err)
-	})
-
-	app.Get("/ws/:id", factory.Setup(func(c *websocket.Conn) map[string]string {
-		params := map[string]string{
-			"id":   c.Params("id"), //id used by default manager to set entry point room
-			"name": c.Cookies("name"),
-		}
-		return params
+	app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
+		gameboxConnection := connection.NewFiberWebSocketConnection(c)
+		subscriber := make(chan *connection.InMessage)
+		gameboxConnection.Subscribe(subscriber)
+		go func(subscriber chan *connection.InMessage, conn connection.IConnection) {
+			for msg := range subscriber {
+				var msgStruct OutMessage
+				if json.Unmarshal([]byte(msg.Message), &msgStruct) != nil {
+					return
+				}
+				fmt.Println(msgStruct)
+				msgStruct.Ping = conn.GetPing().String()
+				conn.SendJSON(msgStruct)
+			}
+		}(subscriber, gameboxConnection)
+		gameboxConnection.StartListeners()
 	}))
-	app.Listen(3000)
+	log.Fatal(app.Listen(":3000"))
 }
